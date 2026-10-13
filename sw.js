@@ -1,11 +1,11 @@
 /* Classifica Trilha 2.0 — service worker (funcionamento offline)
    Estratégia: tudo é pré-armazenado na instalação; depois usa o cache primeiro
    e atualiza em segundo plano. Para publicar uma nova versão, altere VERSION. */
-const VERSION = '2.0.0';
+const VERSION = '2.0.1';
 const CACHE = 'classifica-trilha-v' + VERSION;
 const ASSETS = [
-  './', './index.html', './styles.css?v=200', './core.js?v=200', './tracks.js?v=200', './charts.js?v=200',
-  './db.js?v=200', './app.js?v=200', './manifest.webmanifest?v=200',
+  './', './index.html', './styles.css?v=201', './core.js?v=201', './tracks.js?v=201', './charts.js?v=201',
+  './db.js?v=201', './app.js?v=201', './manifest.webmanifest?v=201',
   './icon.svg', './icon-192.png', './icon-512.png', './icon-maskable-512.png',
   './icon-severity.svg', './icon-orientation.svg', './icon-terrain.svg', './icon-effort.svg'
 ];

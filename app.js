@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const C = CT, { fmt, durationText, minutesText, aggregate } = C, esc = C.charts.esc;
-  const APP_VERSION = '2.0.0';
+  const APP_VERSION = '2.0.1';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const iconSrc = id => (window.CT_ICONS && window.CT_ICONS[id]) || './icon-' + id + '.svg';
@@ -13,6 +13,8 @@
   let editIndex = null;      // índice da etapa em edição
   let routeTrack = null, routeLogo = null; // estado temporário do formulário do roteiro
   let draftTimer = null;
+  let pendingEdit = null;    // etapa a abrir ao entrar na tela (índice ou 'new')
+  let pendingScroll = false;
   let deferredInstall = null;
 
   /* ================= utilidades ================= */
@@ -41,7 +43,7 @@
 
   function cleanBars() { $$('.actionbar,.bottombar').forEach(e => e.remove()); $('#app').classList.remove('with-bar'); }
   function addBars(title, sub, buttons) {
-    const btns = buttons.map(b => `<button type="button" class="btn ${b.cls}" data-act="${b.act}">${b.label}</button>`).join('');
+    const btns = buttons.map(b => `<button type="button" class="btn ${b.cls}" data-act="${b.act}"${b.aria ? ` aria-label="${b.aria}" title="${b.aria}"` : ''}>${b.label}</button>`).join('');
     const top = document.createElement('div');
     top.className = 'actionbar no-print';
     top.innerHTML = `<div class="ab-title">${esc(title)}<small>${esc(sub)}</small></div><div class="ab-btns">${btns}</div>`;
@@ -237,6 +239,7 @@
   const secHead = (img, title, sub) => `<div class="sec-h"><img src="${iconSrc(img)}" alt="" width="44" height="44"><div><h2>${title}</h2><small>${sub}</small></div></div>`;
 
   function viewStages() {
+    cleanBars();
     const main = $('#app'), s = survey, long = s.activity === 'Caminhada de longo curso';
     const a = aggregate(s), nextDay = s.segments.length ? s.segments[s.segments.length - 1].day || 1 : 1;
     const t = s.track && s.track.points && s.track.points.length > 1 ? s.track : null;
@@ -246,6 +249,7 @@
         <button class="btn btn-sm btn-outline" id="editRoute" type="button">Editar roteiro</button></section>
       <section id="savedBox"></section>
       <div id="editBanner" class="banner hidden"></div>
+      <div id="snavBox"></div>
       <form id="stageForm" class="stack" novalidate autocomplete="off">
         <section class="card sec" id="secData">
           <div class="sec-h"><div class="n" id="stageNum">1</div><div><h2>Dados da etapa</h2><small>Uma etapa é uma parte do percurso com características próprias.</small></div></div>
@@ -300,16 +304,17 @@
     </div>`;
     const km = fmt(a.total, 2);
     addBars(s.name, `${s.segments.length} ${s.segments.length === 1 ? 'etapa' : 'etapas'} · ${km} km`, [
+      { act: 'prev', cls: 'btn-outline btn-prev', label: '‹', aria: 'Etapa anterior' },
       { act: 'next', cls: 'btn-outline', label: '＋ Próxima etapa' },
       { act: 'finish', cls: 'btn-primary', label: '✓ Finalizar classificação' }
     ]);
     bindStages();
-    renderSaved(); loadDraft(); refreshLive();
-    scrollTop();
+    loadDraft(); renderSaved(); refreshLive();
+    if (pendingScroll) { pendingScroll = false; $('#snavBox').scrollIntoView({ behavior: 'smooth', block: 'start' }); } else scrollTop();
   }
 
   function bindStages() {
-    $$('[data-act]').forEach(b => b.onclick = () => (b.dataset.act === 'next' ? onNext() : onFinish()));
+    $$('[data-act]').forEach(b => b.onclick = () => ({ prev: onPrev, next: onNext, finish: onFinish }[b.dataset.act])());
     $('#editRoute').onclick = () => { saveDraftNow(); nav('roteiro'); };
     const f = $('#stageForm');
     f.addEventListener('input', onFormChange); f.addEventListener('change', onFormChange);
@@ -370,25 +375,36 @@
     return !st.name && st.distance == null && !st.ascent && !st.descent && st.orientation == null && st.terrain == null && !st.factors.length &&
       st.start === b.start && !st.end && st.startAltitude === b.startAltitude && st.endAltitude == null;
   }
+  const SEG_KEYS = ['name', 'start', 'startAltitude', 'end', 'endAltitude', 'distance', 'surface', 'ascent', 'descent', 'day', 'orientation', 'terrain'];
+  function formDiffersFromSegment(i) {
+    const seg = survey.segments[i], st = readForm(); if (!seg) return true;
+    const norm = v => (v == null || v === '' ? null : v);
+    if (SEG_KEYS.some(k => norm(st[k]) !== norm(seg[k]) && !(k === 'day' && !$('#f-day')) && !((k === 'ascent' || k === 'descent') && !(st[k] || seg[k])))) return true;
+    return JSON.stringify([...st.factors].sort()) !== JSON.stringify([...(seg.factors || [])].sort());
+  }
   function saveDraftNow() {
     if (!survey || !$('#stageForm')) return;
-    survey.draft = formIsEmpty() ? null : Object.assign(readForm(), { editIndex });
+    if (editIndex == null) survey.draft = formIsEmpty() ? null : readForm();
+    else survey.editDraft = formDiffersFromSegment(editIndex) ? { index: editIndex, state: readForm() } : null;
     persist();
   }
   function loadDraft() {
-    const d = survey.draft;
-    if (d && (editIndex == null)) {
-      editIndex = Number.isInteger(d.editIndex) && survey.segments[d.editIndex] ? d.editIndex : null;
-      writeForm(d); showBanner();
-    } else { writeForm(blankState()); showBanner(); }
-    updateStageNumber();
+    // compatibilidade: rascunho antigo que guardava o índice dentro dele
+    if (survey.draft && Number.isInteger(survey.draft.editIndex)) { survey.editDraft = { index: survey.draft.editIndex, state: survey.draft }; survey.draft = null; }
+    const segs = survey.segments; let target = pendingEdit; pendingEdit = null;
+    if (target == null) target = survey.editDraft && segs[survey.editDraft.index] ? survey.editDraft.index : 'new';
+    if (target !== 'new' && segs[target]) {
+      editIndex = target; const ed = survey.editDraft;
+      writeForm(ed && ed.index === target ? ed.state : segs[target]);
+    } else { editIndex = null; writeForm(survey.draft || blankState()); }
+    showBanner(); updateStageNumber(); updateBars();
   }
   function showBanner() {
     const b = $('#editBanner');
     if (editIndex == null) { b.classList.add('hidden'); return; }
     b.classList.remove('hidden');
-    b.innerHTML = `<span>Editando a etapa ${editIndex + 1}: ${esc(survey.segments[editIndex].name)}</span><button class="btn btn-sm btn-outline" type="button" id="cancelEdit">Cancelar edição</button>`;
-    $('#cancelEdit').onclick = () => { editIndex = null; survey.draft = null; writeForm(blankState()); showBanner(); updateStageNumber(); renderSaved(); refreshLive(); persist(); };
+    b.innerHTML = `<span>Editando a etapa ${editIndex + 1} de ${survey.segments.length}: ${esc(survey.segments[editIndex].name)}</span><button class="btn btn-sm btn-outline" type="button" id="cancelEdit">Descartar alterações</button>`;
+    $('#cancelEdit').onclick = () => { survey.editDraft = null; persist(); pendingEdit = 'new'; viewStages(); };
   }
   function updateStageNumber() {
     const n = editIndex != null ? editIndex + 1 : survey.segments.length + 1;
@@ -447,14 +463,43 @@
     const seg = C.normalizeSegment(Object.assign({}, st), idx);
     Object.keys(seg).forEach(k => seg[k] === undefined && delete seg[k]);
     if (editIndex != null) survey.segments[editIndex] = seg; else survey.segments.push(seg);
-    editIndex = null; survey.draft = null; persist();
+    if (editIndex != null) survey.editDraft = null; else survey.draft = null;
+    editIndex = null; persist();
     return true;
   }
+  function updateBars() {
+    const n = survey.segments.length;
+    const label = editIndex == null ? '＋ Próxima etapa' : editIndex < n - 1 ? `Salvar e ir à etapa ${editIndex + 2}` : 'Salvar e criar nova etapa';
+    $$('[data-act=next]').forEach(b => { b.textContent = label; });
+    const hasPrev = editIndex == null ? n > 0 : editIndex > 0;
+    $$('[data-act=prev]').forEach(b => b.classList.toggle('hidden', !hasPrev));
+  }
+  /* Sai da etapa atual sem perder nada: edição válida é salva; etapa nova incompleta vira rascunho. */
+  function leaveCurrent() {
+    if (editIndex != null) {
+      if (!formDiffersFromSegment(editIndex)) { survey.editDraft = null; return true; }
+      const n = editIndex + 1;
+      if (!validateForm()) { toast('Complete os campos obrigatórios ou use “Descartar alterações” para sair desta etapa.'); return false; }
+      commitForm(); toast(`Alterações da etapa ${n} salvas.`); return true;
+    }
+    survey.draft = formIsEmpty() ? null : readForm(); persist(); return true;
+  }
+  function goStage(target) {
+    if (!leaveCurrent()) return;
+    pendingEdit = target; pendingScroll = true; viewStages();
+  }
+  function onPrev() {
+    const n = survey.segments.length, t = editIndex == null ? n - 1 : editIndex - 1;
+    if (t >= 0) goStage(t);
+  }
   function onNext() {
+    const wasEdit = editIndex, n = survey.segments.length;
     const r = commitForm();
     if (r === 'empty') { toast('Preencha os dados da etapa antes de cadastrar a próxima.'); $('#f-dist').focus(); return; }
     if (!r) return;
-    toast('Etapa salva. Cadastre a próxima.'); viewStages();
+    pendingEdit = wasEdit != null && wasEdit < n - 1 ? wasEdit + 1 : 'new';
+    toast(wasEdit != null ? `Etapa ${wasEdit + 1} atualizada.` : 'Etapa salva. Cadastre a próxima.');
+    viewStages();
   }
   async function onFinish() {
     const r = commitForm();
@@ -469,33 +514,32 @@
     nav('resultado');
   }
   function renderSaved() {
-    const a = aggregate(survey), box = $('#savedBox');
-    $('#chipCount').innerHTML = `<b>${survey.segments.length}</b> ${survey.segments.length === 1 ? 'etapa' : 'etapas'} · ${fmt(a.total, 2)} km`;
-    if (!survey.segments.length) { box.innerHTML = ''; return; }
-    box.innerHTML = `<h2 style="margin:0 0 10px">Etapas cadastradas</h2><div class="stages">${a.segments.map((s, i) =>
-      `<div class="stage ${editIndex === i ? 'editing' : ''}" role="button" tabindex="0" data-edit="${i}" aria-label="Editar etapa ${i + 1}: ${esc(s.name)}"><span class="n">${i + 1}</span>
-        <span><b>${esc(s.name)}</b><small>${fmt(s.distance, 2)} km · ↑${s.ascent} m ↓${s.descent} m${a.multiDay ? ' · dia ' + s.day : ''}</small></span>
-        <button class="icon-btn" data-del="${i}" type="button" aria-label="Excluir etapa ${i + 1}" title="Excluir">🗑</button>
-        <span class="badges">${badge('severity', s.severity)}${badge('orientation', s.orientation)}${badge('terrain', s.terrain)}${badge('effort', C.effortLevel(s.effort))}</span></div>`).join('')}</div>`;
-    $$('[data-edit]', box).forEach(el => {
-      const go = () => startEdit(+el.dataset.edit);
-      el.onclick = e => { if (e.target.closest('[data-del]')) return; go(); };
-      el.onkeydown = e => { if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('[data-del]')) { e.preventDefault(); go(); } };
+    const a = aggregate(survey), box = $('#savedBox'), n = survey.segments.length;
+    $('#chipCount').innerHTML = `<b>${n}</b> ${n === 1 ? 'etapa' : 'etapas'} · ${fmt(a.total, 2)} km`;
+    // navegador por números
+    $('#snavBox').innerHTML = n ? `<nav class="snav" aria-label="Navegar entre etapas"><span class="snav-l">Ir para</span><div class="snav-list">${a.segments.map((s, i) =>
+      `<button type="button" class="pill-n ${editIndex === i ? 'cur' : ''}" data-goto="${i}" aria-label="Etapa ${i + 1}: ${esc(s.name)}"${editIndex === i ? ' aria-current="step"' : ''}>${i + 1}</button>`).join('')}<button type="button" class="pill-n new ${editIndex == null ? 'cur' : ''}" data-goto="new">＋ Nova</button></div></nav>` : '';
+    $$('[data-goto]').forEach(b => b.onclick = () => {
+      const t = b.dataset.goto === 'new' ? 'new' : +b.dataset.goto;
+      if ((t === 'new' && editIndex == null) || t === editIndex) return;
+      goStage(t);
     });
+    if (!n) { box.innerHTML = ''; return; }
+    box.innerHTML = `<h2 style="margin:0 0 10px">Etapas cadastradas</h2><div class="stages">${a.segments.map((s, i) =>
+      `<div class="stage ${editIndex === i ? 'editing' : ''}" role="group" aria-label="Etapa ${i + 1}: ${esc(s.name)}" data-edit="${i}"><span class="n">${i + 1}</span>
+        <span><b>${esc(s.name)}</b><small>${fmt(s.distance, 2)} km · ↑${s.ascent} m ↓${s.descent} m${a.multiDay ? ' · dia ' + s.day : ''}</small></span>
+        <span class="acts"><button class="btn btn-sm btn-soft" data-edit-btn="${i}" type="button" aria-label="Editar etapa ${i + 1}">✎ Editar</button><button class="icon-btn" data-del="${i}" type="button" aria-label="Excluir etapa ${i + 1}" title="Excluir">🗑</button></span>
+        <span class="badges">${badge('severity', s.severity)}${badge('orientation', s.orientation)}${badge('terrain', s.terrain)}${badge('effort', C.effortLevel(s.effort))}</span></div>`).join('')}</div>`;
+    $$('[data-edit]', box).forEach(el => { el.onclick = e => { if (e.target.closest('[data-del],[data-edit-btn]')) return; startEdit(+el.dataset.edit); }; });
+    $$('[data-edit-btn]', box).forEach(b => b.onclick = () => startEdit(+b.dataset.editBtn));
     $$('[data-del]', box).forEach(b => b.onclick = async e => {
       e.stopPropagation(); const i = +b.dataset.del;
       if (!(await confirmDialog('Excluir etapa?', `A etapa ${i + 1} (“${survey.segments[i].name}”) será removida do roteiro.`, 'Excluir', 'Cancelar'))) return;
-      survey.segments.splice(i, 1); if (editIndex === i) editIndex = null; else if (editIndex != null && editIndex > i) editIndex--;
+      survey.segments.splice(i, 1); survey.editDraft = null; editIndex = null; pendingEdit = 'new';
       await persist(); viewStages();
     });
   }
-  async function startEdit(i) {
-    if (!formIsEmpty() && editIndex !== i) {
-      if (!(await confirmDialog('Descartar o que está no formulário?', 'Há dados ainda não salvos na etapa em preenchimento. Abrir outra etapa para edição descarta esses dados.', 'Descartar e editar', 'Voltar'))) return;
-    }
-    editIndex = i; survey.draft = null; writeForm(survey.segments[i]); showBanner(); updateStageNumber(); renderSaved(); refreshLive();
-    $('#secData').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  function startEdit(i) { if (i === editIndex) { $('#secData').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } goStage(i); }
 
   /* ================= RESULTADO (passo 3) ================= */
   const critCell = (k, n, label) => `<div><img src="${iconSrc(k)}" alt="" width="48" height="48"><strong>${TITLES[k] === 'Orientação de navegação' ? 'Orientação de navegação do percurso' : TITLES[k]}</strong><span class="num">${n}</span><span class="lab">${esc(label)}</span></div>`;
@@ -527,10 +571,10 @@
   }
 
   function detailsHtml(sv, a) {
-    const rows = a.segments.map((s, i) => `<tr><td>${i + 1}${a.multiDay ? ' · d' + s.day : ''}</td><td>${esc(s.name)}</td><td>${fmt(s.distance, 2)}</td><td>${s.ascent} / ${s.descent}</td><td>${(C.SURFACES.find(p => p.v === s.surface) || {}).name || ''} (${s.surface} km/h)</td><td>${s.severity} <span class="muted">(${s.factors.length})</span></td><td>${s.orientation}</td><td>${s.terrain}</td><td>${durationText(s.effort)} · ${C.effortLevel(s.effort)}</td></tr>`).join('');
+    const rows = a.segments.map((s, i) => `<tr><td>${i + 1}${a.multiDay ? ' · d' + s.day : ''}</td><td>${esc(s.name)}</td><td>${fmt(s.distance, 2)}</td><td>${s.ascent} / ${s.descent}</td><td>${(C.SURFACES.find(p => p.v === s.surface) || {}).name || ''} (${s.surface} km/h)</td><td>${s.severity} <span class="muted">(${s.factors.length})</span></td><td>${s.orientation}</td><td>${s.terrain}</td><td>${durationText(s.effort)} · ${C.effortLevel(s.effort)}</td><td class="no-print"><button class="btn btn-sm btn-soft" data-redit="${i}" type="button">✎ Editar</button></td></tr>`).join('');
     const days = a.days.map(d => `<li>${a.multiDay ? 'Dia ' + d.day + ': ' : ''}TH ${durationText(d.th)} · TV ${durationText(d.tv)} → <b>IE ${durationText(d.ie)}</b> (nível ${d.level})</li>`).join('');
     return `<section class="det"><div class="card stack"><h2>Detalhamento por etapa</h2>
-      <div class="tbl"><table><thead><tr><th>#</th><th>Etapa</th><th>km</th><th>↑ / ↓ (m)</th><th>Piso</th><th>Sever. (fatores)</th><th>Orient.</th><th>Terreno</th><th>IE · nível</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="tbl"><table><thead><tr><th>#</th><th>Etapa</th><th>km</th><th>↑ / ↓ (m)</th><th>Piso</th><th>Sever. (fatores)</th><th>Orient.</th><th>Terreno</th><th>IE · nível</th><th class="no-print"></th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="note">Níveis finais: severidade, orientação e terreno = maior valor entre as etapas; esforço = soma dos tempos das etapas (por dia, no longo curso). Os níveis de esforço por etapa são apenas informativos.</p></div>
       <div class="card stack"><h2>Memória de cálculo do esforço</h2>
         <ul style="margin:0;padding-left:18px">${days}</ul>
@@ -545,7 +589,8 @@
       ${docHtml(sv, a)}${detailsHtml(sv, a)}
       <div class="res-actions no-print"><button class="btn btn-primary" id="printBtn2" type="button">🖨 Imprimir / salvar PDF</button><button class="btn btn-dark" id="newBtn2" type="button">＋ Novo roteiro</button><button class="btn btn-ghost" id="homeBtn2" type="button">Voltar ao início</button></div></div>`;
     $('#printBtn').onclick = $('#printBtn2').onclick = () => window.print();
-    $('#reviewBtn').onclick = () => nav('etapas');
+    $('#reviewBtn').onclick = () => { pendingEdit = 'new'; nav('etapas'); };
+    $$('[data-redit]').forEach(b => b.onclick = () => { pendingEdit = +b.dataset.redit; pendingScroll = true; nav('etapas'); });
     $('#copyBtn').onclick = () => copyResult(sv, a);
     $('#newBtn2').onclick = async () => { survey = null; routeTrack = null; routeLogo = null; await TrailDB.clearCurrent(); nav('roteiro'); };
     $('#homeBtn2').onclick = () => nav('inicio');

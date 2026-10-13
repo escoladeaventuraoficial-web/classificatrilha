@@ -288,3 +288,17 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute
   table{min-width:0;font-size:11px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+
+/* Navegação entre etapas */
+.snav{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card)}
+.snav-l{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);flex:none}
+.snav-list{display:flex;gap:8px;overflow-x:auto;padding:4px 2px;scrollbar-width:thin}
+.pill-n{flex:none;min-width:44px;height:44px;padding:0 12px;border-radius:12px;border:2px solid var(--line);background:var(--card);font-weight:800;font-size:15px;cursor:pointer;color:var(--ink)}
+.pill-n:hover{border-color:var(--y)}
+.pill-n.cur{background:var(--y);border-color:var(--forest);color:var(--on-y)}
+.pill-n.new{border-style:dashed}
+.stage .acts{grid-column:3;grid-row:1/3;display:flex;align-items:center;gap:4px}
+.stage{cursor:default}
+.btn-prev{flex:0 0 52px!important;padding:0!important;font-size:26px;line-height:1}
+@media (max-width:560px){.stage{grid-template-columns:auto 1fr}.stage .acts{grid-column:1/-1;grid-row:auto;justify-content:flex-end}.stage .badges{grid-column:2}}
+@media (max-width:560px){.actionbar .btn,.bottombar .btn{padding:0 8px;font-size:13.5px}}

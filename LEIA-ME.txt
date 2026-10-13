@@ -18,7 +18,7 @@ INSTALAR NO CELULAR
   Abra uma vez com internet; depois tudo funciona offline.
 
 PUBLICAR UMA NOVA VERSÃO
-  Altere VERSION em sw.js e o sufixo ?v=200 em index.html e sw.js. Os usuários
+  Altere VERSION em sw.js e o sufixo ?v=201 em index.html e sw.js. Os usuários
   recebem a atualização ao abrir o app (ou em Dados > Verificar atualização).
 
 MIGRAR OS DADOS PARA OUTRO ENDEREÇO
