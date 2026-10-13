@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "Classifica Trilha — ABNT NBR ISO 3021",
+  "short_name": "Classifica Trilha",
+  "description": "Classificação offline de percursos de caminhada e caminhada de longo curso, com base na ABNT NBR ISO 3021:2024.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAF8F2",
+  "theme_color": "#FFC629",
+  "lang": "pt-BR",
+  "categories": ["travel", "utilities", "education"],
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

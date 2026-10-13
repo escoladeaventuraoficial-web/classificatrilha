@@ -1,0 +1,30 @@
+CLASSIFICA TRILHA 2.0 — PWA (ABNT NBR ISO 3021:2024)
+
+ARQUIVOS (mantenha tudo na mesma pasta; index.html na raiz)
+  index.html, styles.css, core.js (regras da norma), tracks.js (GPX/KML/KMZ),
+  charts.js (mapa e perfil), db.js (armazenamento local), app.js (interface),
+  manifest.webmanifest, sw.js (offline), icon*.svg/png
+
+PUBLICAR
+  Envie a pasta inteira para uma hospedagem HTTPS (ex.: GitHub Pages, Netlify,
+  Cloudflare Pages, domínio próprio). Service worker e instalação só funcionam
+  em HTTPS (ou em localhost). Abrir index.html direto do disco (file://) funciona
+  para uso básico, mas sem instalação e sem modo offline garantido.
+  Teste local:  python3 -m http.server 8080   e abra http://localhost:8080
+
+INSTALAR NO CELULAR
+  Android/Chrome: abra o endereço, toque em “Instalar” (ou menu ⋮ > Instalar app).
+  iPhone/Safari: Compartilhar > Adicionar à Tela de Início.
+  Abra uma vez com internet; depois tudo funciona offline.
+
+PUBLICAR UMA NOVA VERSÃO
+  Altere VERSION em sw.js e o sufixo ?v=200 em index.html e sw.js. Os usuários
+  recebem a atualização ao abrir o app (ou em Dados > Verificar atualização).
+
+MIGRAR OS DADOS PARA OUTRO ENDEREÇO
+  IndexedDB não passa de um endereço para outro. No endereço ANTIGO: Dados >
+  Exportar backup. No endereço NOVO: Dados > Restaurar backup. O formato do
+  backup é o mesmo da v1.11; a restauração só acrescenta, nunca apaga.
+
+PRIVACIDADE
+  Sem login, sem envio de dados. Arquivos GPX/KML/KMZ são lidos no aparelho.

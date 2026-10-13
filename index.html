@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FFC629">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Classificação offline de percursos de caminhada e caminhada de longo curso, com base na ABNT NBR ISO 3021:2024.">
+<link rel="manifest" href="./manifest.webmanifest?v=200">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="stylesheet" href="./styles.css?v=200">
+<title>Classifica Trilha</title>
+</head>
+<body>
+<a class="skip" href="#app">Ir para o conteúdo</a>
+
+<header class="topbar no-print">
+  <button class="brand" id="homeBtn" type="button" aria-label="Início">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M5 37 18 15l7 10 5-8 13 20z"/><path d="M4 41h40"/></svg></span>
+    <span class="brand-text"><strong>Classifica Trilha</strong><small>ABNT NBR ISO 3021 · v2.0</small></span>
+  </button>
+  <div class="top-actions">
+    <span class="pill" id="statusPill" role="status"><i></i><span id="statusText">Dados salvos neste aparelho</span></span>
+    <button class="btn btn-sm btn-soft hidden" id="installBtn" type="button">Instalar</button>
+    <button class="btn btn-sm btn-ghost" id="dataBtn" type="button" aria-haspopup="dialog">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+      <span>Dados</span>
+    </button>
+  </div>
+</header>
+
+<main id="app" tabindex="-1"></main>
+
+<dialog id="confirmDlg" class="dlg">
+  <form method="dialog">
+    <h2 id="confirmTitle">Confirmar</h2>
+    <p id="confirmMsg"></p>
+    <div class="dlg-actions">
+      <button class="btn btn-ghost" value="cancel" id="confirmNo">Cancelar</button>
+      <button class="btn btn-primary" value="ok" id="confirmYes">Confirmar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dataDlg" class="dlg dlg-wide">
+  <div class="dlg-head"><h2>Dados e backup</h2><button class="icon-btn" id="dataClose" type="button" aria-label="Fechar">✕</button></div>
+  <p class="muted" id="dbInfo">0 classificações salvas neste aparelho.</p>
+  <div class="dlg-grid">
+    <button class="btn btn-primary" id="exportBtn" type="button">Exportar backup</button>
+    <label class="btn btn-outline">Restaurar backup<input id="restoreFile" type="file" accept="application/json,.json" hidden></label>
+  </div>
+  <details class="dlg-note" open>
+    <summary>Trocar de endereço ou de aparelho</summary>
+    <p>Os dados ficam guardados no navegador, separados por endereço (domínio) e por aparelho. Ao publicar o app em outro endereço, eles <b>não</b> são transferidos sozinhos:</p>
+    <ol>
+      <li>No endereço <b>antigo</b>, toque em <b>Exportar backup</b>.</li>
+      <li>No endereço <b>novo</b>, toque em <b>Restaurar backup</b> e escolha o arquivo.</li>
+    </ol>
+    <p>A restauração só acrescenta ou atualiza registros; nada é apagado.</p>
+  </details>
+  <div class="dlg-grid">
+    <button class="btn btn-soft" id="updateBtn" type="button">Verificar atualização</button>
+    <button class="btn btn-soft hidden" id="installBtn2" type="button">Instalar app</button>
+  </div>
+  <p class="muted small" id="iosHint" hidden>No iPhone/iPad: toque em Compartilhar e depois em “Adicionar à Tela de Início”.</p>
+  <p class="muted small">Ferramenta de apoio baseada na Seção 14 da ABNT NBR ISO 3021:2024. A organização responsável pela classificação deve validá-la e mantê-la atualizada. Sem login, sem envio de dados: tudo permanece neste aparelho.</p>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="./core.js?v=200"></script>
+<script src="./tracks.js?v=200"></script>
+<script src="./charts.js?v=200"></script>
+<script src="./db.js?v=200"></script>
+<script src="./app.js?v=200"></script>
+</body>
+</html>
